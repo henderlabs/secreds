@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b86f5"/><stop offset="1" stop-color="#2459d6"/></linearGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffeef0"/></linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#0b1e4d" flood-opacity="0.35"/></filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g transform="translate(-34,-28)">
+    <rect x="322" y="470" width="380" height="290" rx="48" fill="#fff"/>
+    <path d="M392 470v-86a120 120 0 0 1 240 0v86" fill="none" stroke="#fff" stroke-width="58" stroke-linecap="round"/>
+    <circle cx="512" cy="590" r="38" fill="#3068e0"/><rect x="498" y="600" width="28" height="82" rx="14" fill="#3068e0"/>
+  </g>
+  <g filter="url(#sh)"><circle cx="722" cy="722" r="184" fill="url(#badge)"/></g>
+  <g transform="translate(722,755) scale(1.22)" fill="none" stroke="#f0344b" stroke-width="10" stroke-linecap="round">
+      <path d="M-13 20L-13 8A13 22 0 0 1 13 8L13 20"/>
+      <path d="M-29 42L-29 12A29 46 0 0 1 29 12L29 42"/>
+      <path d="M-45 60L-45 16A45 70 0 0 1 45 16L45 60" stroke-dasharray="210 16 400"/>
+      <path d="M-61 60L-61 20A61 94 0 0 1 61 20L61 60" stroke-dasharray="120 16 230 16 400"/>
+      <path d="M-77 46L-77 22A77 116 0 0 1 77 22L77 46" stroke-dasharray="150 18 200 18 400"/>
+      <path d="M-93 30L-93 22A93 136 0 0 1 93 22L93 30" stroke-dasharray="110 20 250 20 400"/>
+      <path d="M0 6V40"/>
+  </g>
+</svg>

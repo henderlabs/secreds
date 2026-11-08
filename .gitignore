@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.DS_Store
+# never commit a data folder or anything that looks like a secret
+.secreds/
+*.env
+*.key
+notice.txt
+audit.log
+meta.json

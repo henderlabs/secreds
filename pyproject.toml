@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secreds"
+version = "0.5.3"
+description = "A local credential broker for AI agents: secrets in the macOS Keychain, Touch ID, per-agent permissions, an audit log."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "henderlabs" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: MacOS :: MacOS X",
+  "Topic :: Security",
+]
+dependencies = [
+  "pyobjc-framework-Security; sys_platform == 'darwin'",
+  "pyobjc-framework-LocalAuthentication; sys_platform == 'darwin'",
+]
+
+[project.optional-dependencies]
+export = ["cryptography>=41"]   # needed only for `secreds export` / `secreds import`
+
+[project.urls]
+Homepage = "https://github.com/henderlabs/secreds"
+Issues = "https://github.com/henderlabs/secreds/issues"
+
+[project.scripts]
+secreds = "secreds.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+secreds = ["assets/*"]

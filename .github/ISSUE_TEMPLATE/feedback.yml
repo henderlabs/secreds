@@ -1,0 +1,39 @@
+name: Feedback
+description: Tell us what works, what is confusing, and what you wish seCreds did.
+title: "[feedback] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. **Never paste a real password, key or token here.** Use obviously fake values.
+        For a security problem, please use the private report link instead of this form.
+  - type: input
+    id: version
+    attributes:
+      label: seCreds version
+      description: "Run `secreds --version`."
+      placeholder: "seCreds 0.2.0 by henderlabs"
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of feedback is this?
+      options:
+        - Something broke
+        - Something was confusing
+        - An idea or request
+        - Something I liked
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, or what would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup (optional)
+      description: macOS version, which AI agents you use, and anything unusual about how you run seCreds.
