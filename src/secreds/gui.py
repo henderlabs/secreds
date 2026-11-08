@@ -669,8 +669,8 @@ function renderActivity(){
    ['Credential\'s address (where it should go)',e.addr?esc(e.addr)+' <span class=mut>(from the credential; the log cannot confirm where the command actually sent it)</span>':''],
    ['Result',e.event=='used'?`<span class="${failed?'bad':''}">${esc(res)}</span>`:''],
    ['Approval',esc(e.event=='used'?approval(e):'')],
-   ['Script fingerprint',e.sha256?`<code>${esc(e.sha256.slice(0,16))}…</code> · ${e.size} bytes${e.kept?' · copy kept':' · text not kept'}`:''],
-   ['Script text',e.sha256&&e.kept?(SCRIPTS[e.sha256]!==undefined?`<button onclick="event.stopPropagation();hideScript('${e.sha256}')">Hide script</button><pre style="white-space:pre-wrap;margin:6px 0 0;padding:8px;border:1px solid var(--line,#8884);border-radius:6px;max-height:320px;overflow:auto;font-size:12px">${esc(SCRIPTS[e.sha256])}</pre>`:`<button onclick="event.stopPropagation();viewScript('${e.sha256}')">View script</button>`):''],
+   ['Script fingerprint',e.sha256?`<code>${esc(e.sha256.slice(0,16))}…</code> · ${e.size} bytes · ${e.kept?(SCRIPTS[e.sha256]!==undefined?`<a href="#" onclick="event.stopPropagation();hideScript('${e.sha256}');return false">hide script</a>`:`<a href="#" onclick="event.stopPropagation();viewScript('${e.sha256}');return false">view script (copy kept)</a>`):'text not kept'}`:''],
+   ['Script text',e.sha256&&e.kept&&SCRIPTS[e.sha256]!==undefined?`<pre style="white-space:pre-wrap;margin:0;padding:8px;border:1px solid var(--line,#8884);border-radius:6px;max-height:320px;overflow:auto;font-size:12px">${esc(SCRIPTS[e.sha256])}</pre>`:''],
    ['Run id',esc(e.run||'')]].filter(x=>x[1]);
   return kv.length?kv:null};
  $('audit').innerHTML='<tr><th><th>Time<th>Event<th>Credential<th>Agent<th>Detail</tr>'+rows.map(e=>{
