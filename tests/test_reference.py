@@ -150,5 +150,19 @@ class ReferenceGuiTests(CoreCase):
         self.assertIn("f_ref", page); self.assertIn("Reference entry: no secret is stored", page)
 
 
+class KeptScriptViewTests(CoreCase):
+    def test_a_kept_script_can_be_read_back_by_its_fingerprint_and_nothing_else(self):
+        import hashlib
+        text = "print('hello')\n"; h = hashlib.sha256(text.encode()).hexdigest()
+        c.CONFIG["keep_scripts"] = True
+        try:
+            self.assertTrue(c._keep_copy(h, text.encode()))
+        finally:
+            c.CONFIG.pop("keep_scripts", None)
+        self.assertEqual(c.read_kept_script(h), text)
+        for bad in ("../../etc/passwd", "abc", "", "0" * 64):
+            with self.assertRaises(ValueError): c.read_kept_script(bad)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -777,6 +777,16 @@ def _keep_copy(digest, data):
             fh.write(data)
     return True
 
+def read_kept_script(digest):
+    """The saved text of a script, looked up by its SHA-256. Only exists when 'keep copies of scripts' was on for that run."""
+    digest = str(digest or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("Not a script fingerprint")
+    f = DATA / "scripts" / (digest + ".txt")
+    if not f.is_file():
+        raise ValueError("No copy of this script was kept")
+    return f.read_bytes().decode("utf-8", "replace")
+
 NOTE_MAX = 300
 
 def add_note(run_id, text, agent):

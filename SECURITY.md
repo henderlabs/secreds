@@ -32,4 +32,4 @@ These are documented design limits. See "Security model" in the README.
 
 ---
 
-<sub>**seCreds** v0.6.0 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.1 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

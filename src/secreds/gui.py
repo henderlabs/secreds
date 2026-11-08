@@ -74,6 +74,7 @@ def act(path, b):
     elif path == "/api/restore-backup":
         return backup.restore_backup(b.get("path", ""), b.get("passphrase", ""), mode=b.get("mode", "merge"), dry_run=bool(b.get("dry_run")), agent="gui", key_file=(b.get("key_file") or "").strip() or None)
     elif path == "/api/settings-save": return {"settings": settings.save(**{k: b[k] for k in ("owner", "agents", "families", "feedback_url", "update_repo", "keep_scripts") if k in b})}
+    elif path == "/api/script": return {"text": c.read_kept_script(b.get("sha256"))}
     elif path == "/api/doctor": return {"checks": settings.doctor()}
     elif path == "/api/update-check": return updater.check(force=True)
     elif path == "/api/update-apply": return updater.apply(tag=b.get("tag") or None, agent="gui")
@@ -634,6 +635,9 @@ function renderHome(){
  <div class=card><div class=row><b>Recent activity</b><span class=sp></span><a href="#/activity" style="color:var(--acc)">View all activity →</a></div>
   ${recent?`<table style="margin-top:6px"><tr><th>Time<th>Event<th>Credential<th>Agent</tr>${recent}</table>${noteLine}`:'<div class=mut style="margin:8px 0">No activity yet.</div>'}</div>`}
 let OPEN={},ALLOPEN=false;
+const SCRIPTS={};
+async function viewScript(h){try{SCRIPTS[h]=(await api('/api/script',{sha256:h})).text}catch(e){SCRIPTS[h]='('+(e.message||'could not load')+')'}renderActivity()}
+function hideScript(h){delete SCRIPTS[h];renderActivity()}
 function actToggle(k){OPEN[k]=!(ALLOPEN?OPEN[k]!==false:!!OPEN[k]);renderActivity()}
 function actAll(on){ALLOPEN=on;OPEN={};renderActivity()}
 function pathHtml(cmd){ // program dimmed, folder dimmed, file name bold; wraps at slashes, never mid-word
@@ -666,6 +670,7 @@ function renderActivity(){
    ['Result',e.event=='used'?`<span class="${failed?'bad':''}">${esc(res)}</span>`:''],
    ['Approval',esc(e.event=='used'?approval(e):'')],
    ['Script fingerprint',e.sha256?`<code>${esc(e.sha256.slice(0,16))}…</code> · ${e.size} bytes${e.kept?' · copy kept':' · text not kept'}`:''],
+   ['Script text',e.sha256&&e.kept?(SCRIPTS[e.sha256]!==undefined?`<button onclick="event.stopPropagation();hideScript('${e.sha256}')">Hide script</button><pre style="white-space:pre-wrap;margin:6px 0 0;padding:8px;border:1px solid var(--line,#8884);border-radius:6px;max-height:320px;overflow:auto;font-size:12px">${esc(SCRIPTS[e.sha256])}</pre>`:`<button onclick="event.stopPropagation();viewScript('${e.sha256}')">View script</button>`):''],
    ['Run id',esc(e.run||'')]].filter(x=>x[1]);
   return kv.length?kv:null};
  $('audit').innerHTML='<tr><th><th>Time<th>Event<th>Credential<th>Agent<th>Detail</tr>'+rows.map(e=>{
