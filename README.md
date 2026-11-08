@@ -8,6 +8,22 @@ seCreds is a small local credential broker for AI coding agents such as Claude C
 
 > **Status: alpha, macOS only.** It started as a personal tool. It is useful, tested, and honest about its limits (see [Security model](#security-model)), but it is not a sandbox and has not had an independent security review.
 
+## What it looks like
+
+*These screenshots use made-up demo data.*
+
+**Home:** what is unlocked right now, anything that needs attention, and recent activity.
+
+![Home page: unlocked credentials, attention list and recent activity](docs/screenshots/home.png)
+
+**Credentials:** a folder tree on the left. Each card shows who can use the credential, whether it is locked, and what it is limited to.
+
+![Credentials page: folder tree and a credential card with its lock state and pinned command](docs/screenshots/credentials.png)
+
+**Activity:** every use, with the reason the agent gave, the command that ran, the result and the agent's own outcome note. Failures and refusals stand out.
+
+![Activity page with two runs expanded, one of them a failed run](docs/screenshots/activity.png)
+
 ## Why
 
 Agents need real credentials to do real work: a NAS API, an S3 bucket, a hypervisor. The usual options are bad: pasting secrets into chat (they end up in transcripts), keeping them in plain `.env` files (any process can read them), or giving the agent your whole password manager session. seCreds sits in the middle:
