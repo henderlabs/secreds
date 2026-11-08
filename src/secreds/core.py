@@ -249,7 +249,8 @@ def _pb_get():
 def copy_value(name, seconds=None):
     """GUI-only: copy the value to the clipboard after Touch ID, then clear it if nothing else replaced it."""
     seconds = CLIPBOARD_SECONDS if seconds is None else seconds
-    get_meta(name)
+    if get_meta(name).get("reference"):
+        raise ValueError("This is a reference entry: there is no secret to copy")
     _confirm(f"copy the value of credential '{name}' to the clipboard")
     value = kc_get(name)
     _pb_set(value)
@@ -266,7 +267,8 @@ def copy_value(name, seconds=None):
 
 def reveal(name):
     """GUI-only: show the full value after Touch ID. Every reveal is audited."""
-    get_meta(name)
+    if get_meta(name).get("reference"):
+        raise ValueError("This is a reference entry: there is no secret to show")
     _confirm(f"show the value of credential '{name}' on screen")
     value = kc_get(name)
     audit("revealed", name, "gui")
@@ -449,7 +451,7 @@ def list_requests():
     return _read(REQUESTS, {})
 
 def add_request(name, agent, kind="api-key", username="", address="", network="", scope="", folder="", bucket="",
-                region="", access_key_id="", notes="", agents=None, allowed_commands=None, human_only=False, env_var=""):
+                region="", access_key_id="", notes="", agents=None, allowed_commands=None, human_only=False, env_var="", reference=False):
     """Record a proposed credential. It can never contain a secret value: those are typed by the owner in the GUI."""
     if not NAME_RE.match(name or ""):
         raise ValueError("Name: letters, digits, . _ - only (max 63)")
@@ -466,7 +468,7 @@ def add_request(name, agent, kind="api-key", username="", address="", network=""
         kind=kind, username=_clean(username, 128, "Username"), address=_clean(address, 253, "Address"), network=network, scope=scope,
         folder=norm_folder(folder), bucket=_clean(bucket, 63, "Bucket"), region=_clean(region, 32, "Region"),
         access_key_id=_clean(access_key_id, 128, "Access key ID"), notes=_clean(notes, 500, "Notes", multiline=True),
-        agents=[a for a in (agents or ["claude"]) if a in AGENTS], human_only=bool(human_only), env_var=env_var,
+        agents=[a for a in (agents or ["claude"]) if a in AGENTS], human_only=bool(human_only), env_var=env_var, reference=bool(reference),
         allowed_commands=[x.strip() for x in (allowed_commands or []) if x.strip()][:10],
     )
     for line in req["allowed_commands"]:
@@ -511,7 +513,7 @@ def get_meta(name):
 def save_cred(name, value=None, *, kind="api-key", notes="", agents=None, mode="ask",
               window_minutes=DEFAULT_WINDOW, expires=None, env_var=None, revoked=None, create=False,
               allowed_commands=None, human_only=None, username=None, address=None, network=None, scope=None,
-              access_key_id=None, bucket=None, region=None, folder=None):
+              access_key_id=None, bucket=None, region=None, folder=None, reference=None):
     if not NAME_RE.match(name):
         raise ValueError("Name: letters, digits, . _ - only (max 63)")
     if mode not in ("ask", "auto"):
@@ -554,13 +556,19 @@ def save_cred(name, value=None, *, kind="api-key", notes="", agents=None, mode="
             raise KeyError(name)
         if not create:
             _confirm(f"change credential '{name}'")
-        if value:
+        was_ref = bool(db.get(name, {}).get("reference"))
+        new_ref = was_ref if reference is None else bool(reference)
+        if new_ref and value:
+            raise ValueError("A reference entry holds no secret: leave the value blank")
+        if new_ref and not create and not was_ref and kc_has(name):
+            raise ValueError("This credential has a stored secret. Delete it first, then create a reference entry, so a secret is never dropped by accident")
+        if value and not new_ref:
             kc_set(name, value)
-        elif create:
-            raise ValueError("A value is required for a new credential")
+        elif not new_ref and (create or was_ref):
+            raise ValueError("A value is required for a new credential" if create else "A value is required to turn a reference entry into a real credential")
         rec = db.get(name, {"created": iso(now()), "last_used": None, "revoked": False})
         rec.update(kind=kind, notes=notes, agents=agents, mode=mode, window_minutes=int(window_minutes),
-                   expires=expires or None, env_var=env_var, updated=iso(now()))
+                   expires=expires or None, env_var=env_var, updated=iso(now()), reference=new_ref)
         if revoked is not None:
             rec["revoked"] = bool(revoked)
         rec.setdefault("human_only", False); rec.setdefault("allowed_commands", []); rec.setdefault("username", "")
@@ -794,6 +802,7 @@ def authorize(name, agent, argv=None, reason="", run_id=""):
     reason = " ".join(str(reason or "").split())[:REASON_MAX]
     def deny(why):
         audit("denied", name, agent, why, reason=reason, run=run_id, cmd=cmd_summary(argv)); raise Denied(f"{name}: {why}")
+    if m.get("reference"): deny(f"reference entry: no secret is stored. Run: secreds info {name}")
     if m.get("human_only"): deny("human-only credential: no agent may use it")
     if not agent: deny("caller is not a known agent (set SECREDS_AGENT=" + "|".join(AGENTS) + ")")
     if len(reason) < REASON_MIN:
@@ -829,7 +838,7 @@ def export_bundle(path, passphrase, names=None):
     import base64
     db = list_creds()
     names = names or list(db)
-    payload = {n: {"meta": db[n], "value": kc_get(n)} for n in names}
+    payload = {n: {"meta": db[n], "value": None if db[n].get("reference") else kc_get(n)} for n in names}
     salt, nonce = os.urandom(16), os.urandom(12)
     key = Scrypt(salt=salt, length=32, n=2**15, r=8, p=1).derive(passphrase.encode())
     ct = AESGCM(key).encrypt(nonce, json.dumps(payload).encode(), b"secreds-v1")
@@ -854,11 +863,27 @@ def import_bundle(path, passphrase, overwrite=False):
         db = list_creds(); exists = n in db
         save_cred(n, item["value"], kind=m["kind"], notes=m["notes"], agents=m["agents"], mode=m["mode"],
                   window_minutes=m["window_minutes"], expires=m["expires"], env_var=m["env_var"],
-                  revoked=m["revoked"], create=not exists, human_only=m.get("human_only"), username=m.get("username", ""), address=m.get("address", ""), network=m.get("network", ""), scope=m.get("scope", ""), access_key_id=m.get("access_key_id", ""), bucket=m.get("bucket", ""), region=m.get("region", ""), folder=m.get("folder", ""),
+                  revoked=m["revoked"], create=not exists, reference=m.get("reference"), human_only=m.get("human_only"), username=m.get("username", ""), address=m.get("address", ""), network=m.get("network", ""), scope=m.get("scope", ""), access_key_id=m.get("access_key_id", ""), bucket=m.get("bucket", ""), region=m.get("region", ""), folder=m.get("folder", ""),
                   allowed_commands=[e["cmd"] for e in m.get("allowed_commands", [])])
         done.append(n)
     audit("import", ",".join(done))
     return done
+
+
+def info(name, agent):
+    """Non-secret details of a reference entry, for an agent that is allowed to see it. Never touches the Keychain."""
+    try:
+        m = get_meta(name)
+    except KeyError:
+        audit("denied", name, agent, "unknown credential"); raise Denied(f"No credential named {name!r}")
+    def deny(why):
+        audit("denied", name, agent, why); raise Denied(f"{name}: {why}")
+    if not agent: deny("caller is not a known agent (set SECREDS_AGENT=" + "|".join(AGENTS) + ")")
+    if not m.get("reference"): deny("info works on reference entries only; this one holds a secret")
+    if m.get("revoked"): deny("entry is revoked")
+    if family(agent) not in {family(x) for x in m["agents"]}: deny(f"agent '{agent}' is not allowed to see this entry")
+    audit("info", name, agent, "read reference details")
+    return {k: m.get(k) or "" for k in ("name", "kind", "folder", "scope", "network", "address", "username", "notes")} | {"name": name}
 
 
 def about():

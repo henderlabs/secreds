@@ -87,7 +87,7 @@ def doctor():
     if sys.platform != "darwin" or c.S is None:
         add("keychain", "macOS Keychain", "bad", "PyObjC Security is not available, so secrets cannot be stored.", "Reinstall with install.sh on a Mac.")
     else:
-        names = sorted(c.list_creds())
+        db = c.list_creds(); names = sorted(n for n in db if not db[n].get("reference"))
         miss = [n for n in names if not c.kc_has(n)]
         if miss: add("keychain", "Keychain values", "bad", f"{len(miss)} of {len(names)} credentials have no value on this Mac: {', '.join(miss)}", "Restore a backup or re-enter the secret.")
         else: add("keychain", "Keychain values", "ok", f"All {len(names)} credentials have a value in the login Keychain.")

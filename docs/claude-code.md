@@ -9,6 +9,8 @@ plain use needs nothing. List the names you use in `~/.secreds/config.json` (`se
 
 Every `secreds run` needs `--reason "why"`, and the agent should finish with `secreds note RUN_ID "what happened"` (the run id is printed after the notice). Add `secreds note` to the allowed commands below so it does not prompt.
 
+**Reference entries** hold no secret (for example, how keyless SSH to a host is set up). An agent reads one with `secreds info NAME`; `secreds run` refuses it. Add `secreds info` to the allowed commands as well.
+
 ## Permission rules
 
 These rules in `~/.claude/settings.json` let the agent *use* credentials but keep it away from the Keychain, the data
@@ -20,6 +22,7 @@ folder and the management commands. Match the path to how you invoke `secreds` (
     "allow": [
       "Bash(~/.local/bin/secreds run:*)",
       "Bash(~/.local/bin/secreds note:*)",
+      "Bash(~/.local/bin/secreds info:*)",
       "Bash(~/.local/bin/secreds list)",
       "Bash(~/.local/bin/secreds audit:*)",
       "Bash(~/.local/bin/secreds notice)"
@@ -84,4 +87,4 @@ would not want your employer to see away from work sessions, or label them Perso
 
 ---
 
-<sub>**seCreds** v0.5.3 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.0 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

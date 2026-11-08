@@ -13,4 +13,4 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ---
 
-<sub>**seCreds** v0.5.3 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.0 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

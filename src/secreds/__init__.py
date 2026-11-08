@@ -1,5 +1,5 @@
 """seCreds: a local credential broker for AI agents. Made by henderlabs."""
-__version__ = "0.5.3"
+__version__ = "0.6.0"
 PRODUCT = "seCreds"
 MAKER = "henderlabs"
 REPO = "henderlabs/secreds"

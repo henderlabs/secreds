@@ -332,6 +332,8 @@ def _collect(include_audit):
     db = c.list_creds()
     secrets, missing = {}, []
     for name in db:
+        if db[name].get("reference"):          # nothing stored in the Keychain for reference entries
+            continue
         try:
             secrets[name] = c.kc_get(name)
         except KeyError:
@@ -406,12 +408,14 @@ def restore_backup(path, passphrase, mode="merge", dry_run=False, agent="cli", k
     skip = [] if mode == "overwrite" else [n for n in clash if n not in also]
     different = []
     for n in clash:                                               # names only: which shared credentials hold a different secret
+        if meta[n].get("reference") or local[n].get("reference"):
+            continue
         try:
             if n in secrets and c.kc_get(n) != secrets[n]:
                 different.append(n)
         except KeyError:
             different.append(n)
-    no_secret = [n for n in create + overwrite if n not in secrets]
+    no_secret = [n for n in create + overwrite if n not in secrets and not meta[n].get("reference")]
     plan = {"create": sorted(create), "overwrite": sorted(overwrite), "skip_existing": sorted(skip), "no_secret_in_backup": sorted(no_secret), "different": sorted(different)}
     if dry_run:
         return plan

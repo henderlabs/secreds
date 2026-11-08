@@ -108,8 +108,8 @@ def cmd_request(a):
     agent = c.detect_agent()
     c.add_request(a.name, agent, kind=a.kind, username=a.username, address=a.address, network=a.network, scope=a.scope,
                   folder=a.folder, bucket=a.bucket, region=a.region, access_key_id=a.access_key_id, notes=a.notes,
-                  agents=a.agents.split(",") if a.agents else None, allowed_commands=a.cmd, human_only=a.human_only, env_var=a.env)
-    print(f"request recorded for '{a.name}'. It now waits on the seCreds Home page, where the owner adds the secret.")
+                  agents=a.agents.split(",") if a.agents else None, allowed_commands=a.cmd, human_only=a.human_only, env_var=a.env, reference=a.reference)
+    print(f"request recorded for '{a.name}'. It now waits on the seCreds Home page, where the owner " + ("confirms it (a reference entry has no secret)." if a.reference else "adds the secret."))
 
 def cmd_requests(a):
     reqs = c.list_requests()
@@ -372,7 +372,7 @@ def cmd_list(a):
     if not db: print("(no credentials)"); return
     for n, m in sorted(db.items()):
         state = "REVOKED" if m["revoked"] else ("expired" if m["expires"] and c.parse(m["expires"]) < c.now() else "active")
-        cmds = "human-only" if m.get("human_only") else (f"{len(m.get('allowed_commands', []))} pinned cmd(s)" if m.get("allowed_commands") else "ANY command" + (" (acknowledged)" if "any_command" in m.get("acks", []) else ""))
+        cmds = "REFERENCE (no secret)" if m.get("reference") else "human-only" if m.get("human_only") else (f"{len(m.get('allowed_commands', []))} pinned cmd(s)" if m.get("allowed_commands") else "ANY command" + (" (acknowledged)" if "any_command" in m.get("acks", []) else ""))
         print(f"{n:24} {state:8} {m['mode']:4} win={m['window_minutes']}m agents={','.join(m['agents']) or '-'} {cmds} folder={m.get('folder') or '-'} scope={m.get('scope') or '-'} addr={m.get('address') or '-'}{' (' + {'lan':'local network','remote':'remote','vpn':'vpn'}.get(m.get('network'), '') + ')' if m.get('network') else ''} "
               f"env={m['env_var']} last_used={m['last_used'] or 'never'} grants={list(g.get(n, {}))}")
 
@@ -414,12 +414,23 @@ def cmd_note(a):
         die(str(e), 3)
     print("noted")
 
+def cmd_info(a):
+    """Non-secret details of a reference entry (for example how keyless SSH to a host is set up)."""
+    try:
+        d = c.info(a.name, c.detect_agent())
+    except c.Denied as e:
+        die(str(e), 3)
+    print(f"{d['name']}  (reference entry: no secret stored)")
+    for k in ("kind", "folder", "scope", "network", "address", "username"):
+        if d[k]: print(f"  {k}: {d[k]}")
+    if d["notes"]: print("  notes:"); print("    " + d["notes"].replace("\n", "\n    "))
+
 def cmd_add(a):
-    v = os.environ.get("SECREDS_VALUE") or getpass.getpass(f"Value for {a.name} (hidden): ")
+    v = None if a.reference else (os.environ.get("SECREDS_VALUE") or getpass.getpass(f"Value for {a.name} (hidden): "))
     c.save_cred(a.name, v, kind=a.kind, notes=a.notes, agents=a.agents.split(",") if a.agents else [],
                 mode=a.mode, window_minutes=a.window, expires=a.expires, env_var=a.env, create=True,
-                allowed_commands=a.cmd, human_only=a.human_only, username=a.username, address=a.address, network=a.network, scope=a.scope, access_key_id=a.access_key_id, bucket=a.bucket, region=a.region, folder=a.folder)
-    print(f"stored {a.name}")
+                allowed_commands=a.cmd, human_only=a.human_only, username=a.username, address=a.address, network=a.network, scope=a.scope, access_key_id=a.access_key_id, bucket=a.bucket, region=a.region, folder=a.folder, reference=a.reference)
+    print(f"stored {a.name}" + (" (reference entry, no secret)" if a.reference else ""))
 
 def cmd_edit(a):
     m = c.get_meta(a.name)
@@ -468,7 +479,7 @@ def main():
     ad.add_argument("--notes", default=""); ad.add_argument("--agents", default="claude"); ad.add_argument("--mode", default="ask")
     ad.add_argument("--window", type=int, default=c.DEFAULT_WINDOW); ad.add_argument("--expires"); ad.add_argument("--env")
     ad.add_argument("--cmd", action="append", default=[], help="allowed command (repeatable); empty = any command")
-    ad.add_argument("--username", default=""); ad.add_argument("--address", default=""); ad.add_argument("--access-key-id", default=""); ad.add_argument("--folder", default=""); ad.add_argument("--bucket", default=""); ad.add_argument("--region", default=""); ad.add_argument("--scope", default="", choices=["", "personal", "work"]); ad.add_argument("--network", default="", choices=["", "lan", "remote", "vpn"]); ad.add_argument("--human-only", action="store_true"); ad.set_defaults(f=cmd_add)
+    ad.add_argument("--username", default=""); ad.add_argument("--address", default=""); ad.add_argument("--access-key-id", default=""); ad.add_argument("--folder", default=""); ad.add_argument("--bucket", default=""); ad.add_argument("--region", default=""); ad.add_argument("--scope", default="", choices=["", "personal", "work"]); ad.add_argument("--network", default="", choices=["", "lan", "remote", "vpn"]); ad.add_argument("--human-only", action="store_true"); ad.add_argument("--reference", action="store_true", help="no secret: a reference entry that only holds notes (for example how keyless SSH is set up)"); ad.set_defaults(f=cmd_add)
     e = s.add_parser("edit"); e.add_argument("name"); e.add_argument("--value", action="store_true")
     for k in ("kind", "notes", "agents", "mode", "expires", "env"): e.add_argument(f"--{k}")
     e.add_argument("--window", type=int); e.set_defaults(f=cmd_edit)
@@ -490,7 +501,9 @@ def main():
     for f in ("username", "address", "folder", "bucket", "region", "access-key-id", "notes", "agents", "env"):
         rq.add_argument("--" + f, default="")
     rq.add_argument("--network", default="", choices=["", "lan", "remote", "vpn"]); rq.add_argument("--scope", default="", choices=["", "personal", "work"])
-    rq.add_argument("--cmd", action="append", default=[]); rq.add_argument("--human-only", action="store_true"); rq.set_defaults(f=cmd_request)
+    rq.add_argument("--cmd", action="append", default=[]); rq.add_argument("--human-only", action="store_true"); rq.add_argument("--reference", action="store_true", help="no secret: a reference entry that only holds notes"); rq.set_defaults(f=cmd_request)
+    inf = s.add_parser("info", help="show the non-secret details of a reference entry (for example how keyless SSH is set up)")
+    inf.add_argument("name"); inf.set_defaults(f=cmd_info)
     s.add_parser("requests", help="list credential requests waiting for the owner").set_defaults(f=cmd_requests)
     ini = s.add_parser("init", help="write config.json (your name, your agents, profile groups)")
     ini.add_argument("--owner", default="the owner"); ini.add_argument("--agents", default="claude,codex")

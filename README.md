@@ -58,6 +58,7 @@ Connecting an agent to a shared or team password manager is the easy route, and 
 - **Per-credential policy:** allowed agents, Touch ID or auto approval, an approval window (15 minutes to 24 hours; new credentials default to 30 minutes), expiry, revoke and restore.
 - **Allowed-commands list with script pinning:** "this key may only be used with `python3 ~/scripts/audit.py`", and if that script changes it stops working until you re-pin it. Overly broad entries such as `bash -c` or `sudo` are rejected.
 - **Human-only credentials** that no agent can ever use (root passwords, admin logins). You can still reveal or copy them.
+- **Reference entries:** a record with no secret, for access that needs none, such as keyless SSH from your Mac. It holds notes, an address and a folder. Agents read it with `secreds info NAME`. `secreds run` refuses it, and Reveal and Copy have nothing to show. It still appears in the inventory and in backups.
 - **Credential types:** API key, login (username and password), S3 bucket (access key ID, secret key, bucket, endpoint, region), SSH key or passphrase, other. Logins and S3 credentials inject the right set of variables (`NAME_USERNAME`, `NAME_PASSWORD`, `AWS_*`, and so on), and an address or several hosts can be stored with each credential.
 - **Credential requests:** an agent can *propose* a new credential with every non-secret detail filled in (`secreds request ...`). It shows on the Home page as "waiting for your secret"; you review it, type the secret and save. The agent never sees the secret.
 - **Any AI tool:** pick the agents you use (Claude Code, Codex, Gemini CLI, Copilot, Cursor, Aider, ...) or add your own on the Agents page, which also gives you a ready-to-paste instructions file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, ...) for each.
@@ -91,7 +92,7 @@ secreds install-app                                       # builds ~/Application
 ## Quick start
 
 ```bash
-secreds --version                # seCreds 0.5.3 by henderlabs; `secreds about` also shows where to send feedback
+secreds --version                # seCreds 0.6.0 by henderlabs; `secreds about` also shows where to send feedback
 secreds gui                      # add a credential (Touch ID to open)
 secreds list                     # names, settings and addresses: never secrets
 SECREDS_AGENT=claude secreds run my-nas --reason "check free space on the NAS" -- python3 check_nas.py
@@ -105,6 +106,18 @@ Agents identify themselves with `SECREDS_AGENT` (Claude Code is also detected au
 ## Reasons and the audit trail
 
 Every agent use needs `--reason` (10 to 200 characters). It is the agent's own statement of why it needs the credential, so it can be wrong; the command, folder, script fingerprint and exit code beside it are recorded by seCreds itself. The Activity page shows each use as a row you can open: reason, the agent's outcome note, the command that ran, folder, result, the Touch ID approval that covered it, the script fingerprint and the credential's configured address. Settings has an option to keep a copy of each script's text (small scripts, owner-only folder, off by default) so you can see exactly what ran, not just its hash.
+
+## Reference entries
+
+Some access needs no secret at all. Keyless SSH from your Mac is the usual example: the key lives in `~/.ssh` and `ssh-agent`, so there is nothing for seCreds to hold. A **reference entry** records that fact in one place, so an agent knows how a host is reached and does not ask for a password that does not exist.
+
+```bash
+secreds add lab-pve-ssh --kind ssh-key --reference --agents claude --folder Lab --address 192.168.111.101-106 \
+  --notes "Keyless SSH with the Mac's agent: ssh st-pve101 ... st-pve106. No password."
+secreds info lab-pve-ssh        # what an agent runs: prints the address and notes, never a secret
+```
+
+In the GUI, tick "No secret (reference only)" on the Add form. The card shows a "reference" tag instead of a lock, and there is no Reveal, Copy or Approve button. Agents can also propose one with `secreds request NAME --reference`. `secreds run` on a reference entry is refused and logged, and the message points to `secreds info`. Keyless SSH is full access to the host, so a reference entry still shows the "any command" warning on Home. Acknowledge it if that is intended.
 
 ## Optional: signed Keychain helper (macOS)
 
@@ -207,4 +220,4 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
-<sub>**seCreds** v0.5.3 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.0 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
