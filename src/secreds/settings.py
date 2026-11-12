@@ -166,16 +166,17 @@ def agent_doc(agent):
     if agent in _CHAT_ONLY:
         body = f"""## Credentials ({c.PRODUCT})
 - Never ask {who} to paste a password, key or token into this chat, and never repeat one if it is pasted. Tell them to rotate it.
-- Credentials live in {c.PRODUCT} on their Mac, which this assistant cannot run. When a task needs one, say which credential and which command, and ask {who} to run it with `secreds run NAME -- <command>` and paste back only the output (never the secret).
+- Credentials live in {c.PRODUCT} on their Mac, which this assistant cannot run. When a task needs one, say which credential and which command, and ask {who} to run it with `secreds run NAME --reason "why" -- <command>` and paste back only the output (never the secret).
 - To add a new credential, ask {who} to open {c.PRODUCT} > Credentials, or to run `secreds request NAME --kind login|api-key|s3 ...` (no secret in the command).
 """
     else:
         body = f"""## Credentials ({c.PRODUCT})
 - Never ask {who} to paste a password, key or token into chat, never store or repeat one. If one is pasted by mistake, tell them to rotate it.
-- Use credentials only through `secreds run NAME -- <command>` (it injects them as environment variables and masks them in the output). List the names with `secreds list` (never shows secrets). My name here is `{agent}` (set `SECREDS_AGENT={agent}`).
+- Use credentials only through `secreds run NAME --reason "short, honest why" -- <command>` (10 to 200 characters; it injects them as environment variables and masks them in the output). List the names with `secreds list` (never shows secrets). My name here is `{agent}` (set `SECREDS_AGENT={agent}`).
+- When the task is done, add one accurate line with `secreds note RUN_ID "what happened"` (the run id is printed after the notice). If an entry is a reference (no secret, for example keyless SSH), `secreds info NAME` shows how it is set up; `secreds run` refuses it.
 - To add a NEW credential, run `secreds request NAME --kind login|api-key|s3 ...` with non-secret details only (address, folder, username, notes). It appears in {c.PRODUCT} and {who} types the secret themselves.
 - Never use a stored password to authenticate sudo or SSH, even if asked. Offer a narrow passwordless-sudo rule, the exact command for them to run, or key/certificate login.
-- Do not read ~/.secreds or the Keychain, and do not run other secreds commands (add, edit, grant, delete, backup, update, gui, ...).
+- Do not read ~/.secreds or the Keychain, and do not run other secreds commands (add, edit, grant, delete, backup, backup-key, sync, update, gui, ...).
 - If a credential is denied, tell {who}; do not work around it.
 """
     return {"file": file, "where": where, "text": body + f"\n<!-- {c.signature()} -->\n"}

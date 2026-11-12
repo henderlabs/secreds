@@ -52,6 +52,7 @@ class SettingsTests(CoreCase):
 
     def test_agent_doc(self):
         d = settings.agent_doc("claude"); self.assertEqual(d["file"], "CLAUDE.md"); self.assertIn("SECREDS_AGENT=claude", d["text"])
+        for must in ("--reason", "secreds note", "secreds info"): self.assertIn(must, d["text"])
         self.assertIn("secreds run", d["text"]); self.assertIn("seCreds", d["text"])
         ch = settings.agent_doc("chatgpt"); self.assertNotIn("SECREDS_AGENT", ch["text"])
         self.assertEqual(settings.agent_doc("unheard-of")["file"], "AGENTS.md")
