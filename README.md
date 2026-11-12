@@ -92,7 +92,7 @@ secreds install-app                                       # builds ~/Application
 ## Quick start
 
 ```bash
-secreds --version                # seCreds 0.6.2 by henderlabs; `secreds about` also shows where to send feedback
+secreds --version                # seCreds 0.6.3 by henderlabs; `secreds about` also shows where to send feedback
 secreds gui                      # add a credential (Touch ID to open)
 secreds list                     # names, settings and addresses: never secrets
 SECREDS_AGENT=claude secreds run my-nas --reason "check free space on the NAS" -- python3 check_nas.py
@@ -112,7 +112,7 @@ Every agent use needs `--reason` (10 to 200 characters). It is the agent's own s
 Some access needs no secret at all. Keyless SSH from your Mac is the usual example: the key lives in `~/.ssh` and `ssh-agent`, so there is nothing for seCreds to hold. A **reference entry** records that fact in one place, so an agent knows how a host is reached and does not ask for a password that does not exist.
 
 ```bash
-secreds add lab-pve-ssh --kind ssh-key --reference --agents claude --folder Lab --address 192.168.111.101-106 \
+secreds add lab-pve-ssh --kind ssh-key --reference --agents claude --folder Lab --address 192.0.2.101-106 \
   --notes "Keyless SSH with the Mac's agent: ssh st-pve101 ... st-pve106. No password."
 secreds info lab-pve-ssh        # what an agent runs: prints the address and notes, never a secret
 ```
@@ -220,4 +220,4 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
-<sub>**seCreds** v0.6.2 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.3 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

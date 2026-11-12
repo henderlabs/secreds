@@ -30,9 +30,9 @@ class ReferenceCoreTests(CoreCase):
         self.assertIn("reference entry", self.audit_text())
 
     def test_info_returns_the_non_secret_details_to_an_allowed_agent(self):
-        self.ref(address="192.168.111.101-106", folder="Lab", scope="personal", network="lan")
+        self.ref(address="192.0.2.101-106", folder="Lab", scope="personal", network="lan")
         d = c.info("lab-ssh", "claude")
-        self.assertEqual(d["notes"], NOTE); self.assertEqual(d["address"], "192.168.111.101-106"); self.assertEqual(d["folder"], "Lab")
+        self.assertEqual(d["notes"], NOTE); self.assertEqual(d["address"], "192.0.2.101-106"); self.assertEqual(d["folder"], "Lab")
         self.assertIn('"event": "info"', self.audit_text())
 
     def test_info_is_refused_for_other_agents_revoked_entries_and_real_credentials(self):
@@ -97,10 +97,10 @@ class ReferenceTransferTests(CoreCase):
 
 class ReferenceCliTests(CoreCase):
     def test_add_reference_does_not_prompt_and_info_prints_the_notes(self):
-        code, out, _ = run_cli("add", "lab-ssh", "--kind", "ssh-key", "--reference", "--agents", "claude", "--notes", NOTE, "--address", "192.168.111.101-106")
+        code, out, _ = run_cli("add", "lab-ssh", "--kind", "ssh-key", "--reference", "--agents", "claude", "--notes", NOTE, "--address", "192.0.2.101-106")
         self.assertEqual(code, 0); self.assertIn("reference entry", out); self.assertEqual(self.store, {})
         code, out, _ = run_cli("info", "lab-ssh", env={"SECREDS_AGENT": "claude"})
-        self.assertEqual(code, 0); self.assertIn(NOTE, out); self.assertIn("192.168.111.101-106", out); self.assertIn("no secret stored", out)
+        self.assertEqual(code, 0); self.assertIn(NOTE, out); self.assertIn("192.0.2.101-106", out); self.assertIn("no secret stored", out)
 
     def test_run_on_a_reference_entry_fails_with_a_pointer_to_info(self):
         c.save_cred("lab-ssh", None, create=True, reference=True, kind="ssh-key", agents=["claude"])
