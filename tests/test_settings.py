@@ -36,11 +36,19 @@ class SettingsTests(CoreCase):
 
     def test_owner_and_links_need_no_touch_id(self):
         n = len(self.prompts)
-        settings.save(owner="Pat", feedback_url="https://example.com/fb", update_repo="me/secreds")
+        settings.save(owner="Pat", feedback_url="https://example.com/fb")
         self.assertEqual(len(self.prompts), n)
         self.assertEqual(c.about()["feedback_url"], "https://example.com/fb")
-        settings.save(feedback_url="", update_repo="", owner="")
+        settings.save(feedback_url="", owner="")
         self.assertEqual(c.OWNER, "the owner")
+
+    def test_update_source_needs_touch_id(self):
+        n = len(self.prompts)
+        settings.save(update_repo="me/secreds")
+        self.assertEqual(len(self.prompts), n + 1)
+        settings.save(update_repo="me/secreds")          # unchanged: no prompt
+        self.assertEqual(len(self.prompts), n + 1)
+        settings.save(update_repo="")
 
     def test_agent_doc(self):
         d = settings.agent_doc("claude"); self.assertEqual(d["file"], "CLAUDE.md"); self.assertIn("SECREDS_AGENT=claude", d["text"])

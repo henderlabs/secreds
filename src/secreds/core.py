@@ -97,7 +97,23 @@ def iso(dt):
     return dt.isoformat(timespec="seconds")
 
 def parse(s):
-    return datetime.datetime.fromisoformat(s) if s else None
+    """Timestamp text -> an aware datetime. Accepts a trailing Z, and treats a value with no offset as local time."""
+    if not s:
+        return None
+    t = str(s).strip()
+    if t[-1:] in ("Z", "z"):
+        t = t[:-1] + "+00:00"
+    d = datetime.datetime.fromisoformat(t)
+    return d if d.tzinfo else d.astimezone()
+
+def norm_expires(s):
+    """Validate an expiry typed by the owner and store it with an explicit offset."""
+    if not s:
+        return None
+    try:
+        return iso(parse(s))
+    except (ValueError, TypeError):
+        raise ValueError("Expiry must be a date like 2026-12-31 or 2026-12-31T09:00")
 
 # ---------- small locked JSON files ----------
 def _read(path, default):
@@ -128,16 +144,42 @@ def audit(event, name="", agent="", detail="", **extra):
     rec = {"t": iso(now()), "event": event, "name": name, "agent": agent, "detail": detail}
     rec.update({k: v for k, v in extra.items() if v not in (None, "")})
     line = json.dumps(rec)
+    try:                       # keep the log from growing without bound: one archived generation
+        if AUDIT.stat().st_size > AUDIT_MAX_BYTES:
+            os.replace(AUDIT, AUDIT.with_name(AUDIT.name + ".1"))
+    except OSError:
+        pass
     fd = os.open(AUDIT, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "a") as f:
         f.write(line + "\n")
 
+AUDIT_MAX_BYTES = 10 * 1024 * 1024
+
 def read_audit(limit=200):
+    """The newest `limit` entries, newest first. Reads from the end of the file and skips any damaged line."""
     try:
-        lines = AUDIT.read_text().splitlines()[-limit:]
+        f = open(AUDIT, "rb")
     except FileNotFoundError:
         return []
-    return [json.loads(l) for l in reversed(lines)]
+    out = []
+    with f:
+        size = f.seek(0, os.SEEK_END); pos = size; buf = b""
+        while pos > 0 and len(out) < limit:
+            step = min(1 << 16, pos); pos -= step
+            f.seek(pos); buf = f.read(step) + buf
+            parts = buf.split(b"\n")
+            buf = parts[0] if pos > 0 else b""
+            lines = parts[1:] if pos > 0 else parts
+            for raw in reversed(lines):
+                if not raw.strip():
+                    continue
+                try:
+                    out.append(json.loads(raw))
+                except ValueError:
+                    continue
+                if len(out) >= limit:
+                    break
+    return out
 
 # ---------- keychain (local login keychain; see README for why not iCloud-synced) ----------
 def _q(name, **kw):
@@ -162,7 +204,7 @@ def _kc_helper(*argv, stdin=None):
     if not h:
         return None, b""
     try:
-        r = subprocess.run([h, *argv], input=stdin, capture_output=True, timeout=130)
+        r = subprocess.run([h, *argv], input=stdin, capture_output=True, timeout=130, env=dict(os.environ, SECREDS_HOME=str(DATA)))
     except (OSError, subprocess.SubprocessError):
         return None, b""
     return r.returncode, r.stdout
@@ -179,8 +221,35 @@ def kc_set(name, value: str):
     if st != 0:
         raise RuntimeError(f"Keychain write failed ({st})")
 
+TICKET_SECONDS = 30
+
+def _issue_ticket(name):
+    """A single-use permission slip for the helper's `get`. Only code that goes through this module (and so through the policy
+    checks above it) gets one; running the helper directly is refused."""
+    d = DATA / "tickets"
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tid = os.urandom(32).hex()
+    fd = os.open(d / tid, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"name": name, "exp": time.time() + TICKET_SECONDS}, f)
+    return tid
+
+def _sweep_tickets():
+    try:
+        for f in (DATA / "tickets").iterdir():
+            if time.time() - f.stat().st_mtime > 5 * TICKET_SECONDS:
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
 def kc_get(name):
-    rc, out = _kc_helper("get", name)
+    tid = _issue_ticket(name) if _helper() else None
+    try:
+        rc, out = _kc_helper("get", name, tid) if tid else (None, b"")
+    finally:
+        if tid:
+            (DATA / "tickets" / tid).unlink(missing_ok=True)
+            _sweep_tickets()
     if rc == 0:
         return out.decode()
     if rc == 44:
@@ -200,11 +269,14 @@ def kc_has(name):
     return st == 0
 
 def kc_delete(name):
+    """Remove the Keychain item. A missing item is fine; any other failure raises so the caller never forgets a stored secret."""
     rc, _ = _kc_helper("delete", name)
     if rc == 0:
         return
     _need_keychain()
-    S.SecItemDelete(_q(name))
+    st = S.SecItemDelete(_q(name))
+    if st not in (0, S.errSecItemNotFound):
+        raise RuntimeError(f"Keychain delete failed ({st})")
 
 # ---------- Touch ID ----------
 def touch_id(reason: str, timeout=120) -> bool:
@@ -228,15 +300,30 @@ def _confirm(action):
         audit("denied", "", "", f"Touch ID declined: {action}")
         raise ValueError("Touch ID approval declined or unavailable")
 
-def masked(name):
-    """Fixed-width mask plus a short tail. Short values show less so the tail never gives away much."""
-    try:
-        v = kc_get(name)
-    except KeyError:
-        return ""
+def _tail_of(v):
+    """Short values show less so the tail never gives away much."""
     n = len(v)
     tail = 4 if n >= 12 else (2 if n >= 8 else 0)
-    return "********" + (v[-tail:] if tail else "")
+    return v[-tail:] if tail else ""
+
+def masked(name):
+    """Fixed-width mask plus a short tail. The tail is remembered in the metadata when a value is saved, so the
+    dashboard never has to read secrets back out of the Keychain. Older entries get it filled in once, on first view."""
+    try:
+        m = get_meta(name)
+    except KeyError:
+        return ""
+    if "hint" not in m:
+        try:
+            tail = _tail_of(kc_get(name))
+        except KeyError:
+            return ""
+        with _Lock():
+            db = list_creds()
+            if name in db:
+                db[name]["hint"] = tail; _write(META, db)
+        return "********" + tail
+    return "********" + m["hint"]
 
 CLIPBOARD_SECONDS = 30
 
@@ -283,11 +370,27 @@ def _norm(tok):
     t = os.path.expanduser(tok)
     return os.path.abspath(t) if os.path.exists(t) else t
 
-def cmd_tokens(line, validate=False):
-    toks = [_norm(t) for t in shlex.split(line)]
+SCRIPT_EXT = (".py", ".sh", ".bash", ".zsh", ".rb", ".pl", ".js", ".mjs", ".php", ".command", ".applescript", ".scpt")
+
+def _looks_like_file(tok):
+    """A token that names a file on disk (and so must be pinned), as opposed to a flag, URL or plain word."""
+    if not tok or tok.startswith("-") or "://" in tok:
+        return False
+    return tok.startswith(("/", "~", "./", "../")) or tok.lower().endswith(SCRIPT_EXT)
+
+def cmd_tokens(line, validate=False, check_files=True):
+    raw = shlex.split(line)
+    toks = [_norm(t) for t in raw]
     if not toks:
         raise ValueError("empty command")
     if validate:
+        # A script that cannot be found at save time would be left unpinned and could later be swapped for anything.
+        for r, t in zip(raw, toks):
+            if check_files and _looks_like_file(r):
+                if not os.path.isabs(t):
+                    raise ValueError(f"'{r}': give the full path to the script (for example ~/scripts/{os.path.basename(r)}), so it can be pinned")
+                if not os.path.isfile(t):
+                    raise ValueError(f"'{r}' was not found. A script must exist when it is allowed so seCreds can pin its contents")
         base = os.path.basename(toks[0])
         if base in NEVER:
             raise ValueError(f"'{base}' can never be allowed")
@@ -547,6 +650,9 @@ def save_cred(name, value=None, *, kind="api-key", notes="", agents=None, mode="
     for line in (allowed_commands or []):   # validate BEFORE anything is written to the Keychain
         if line.strip():
             cmd_tokens(line.strip(), validate=True)
+    if not create and name in list_creds():
+        _confirm(f"change credential '{name}'")      # before the lock: a waiting Touch ID sheet must not block `secreds run`
+    expires = norm_expires(expires)
     with _Lock():
         db = list_creds()
         exists = name in db
@@ -554,21 +660,24 @@ def save_cred(name, value=None, *, kind="api-key", notes="", agents=None, mode="
             raise ValueError(f"{name!r} already exists")
         if not create and not exists:
             raise KeyError(name)
-        if not create:
-            _confirm(f"change credential '{name}'")
         was_ref = bool(db.get(name, {}).get("reference"))
         new_ref = was_ref if reference is None else bool(reference)
         if new_ref and value:
             raise ValueError("A reference entry holds no secret: leave the value blank")
         if new_ref and not create and not was_ref and kc_has(name):
             raise ValueError("This credential has a stored secret. Delete it first, then create a reference entry, so a secret is never dropped by accident")
+        hint = None
         if value and not new_ref:
-            kc_set(name, value)
+            kc_set(name, value); hint = _tail_of(value)
         elif not new_ref and (create or was_ref):
             raise ValueError("A value is required for a new credential" if create else "A value is required to turn a reference entry into a real credential")
         rec = db.get(name, {"created": iso(now()), "last_used": None, "revoked": False})
         rec.update(kind=kind, notes=notes, agents=agents, mode=mode, window_minutes=int(window_minutes),
                    expires=expires or None, env_var=env_var, updated=iso(now()), reference=new_ref)
+        if hint is not None:
+            rec["hint"] = hint
+        elif new_ref:
+            rec.pop("hint", None)
         if revoked is not None:
             rec["revoked"] = bool(revoked)
         rec.setdefault("human_only", False); rec.setdefault("allowed_commands", []); rec.setdefault("username", "")
@@ -614,6 +723,46 @@ def save_cred(name, value=None, *, kind="api-key", notes="", agents=None, mode="
     audit("created" if create else ("value-replaced" if value else "edited"), name)
     return rec
 
+def sanitize_meta(m, local=None):
+    """Check credential metadata that arrives from outside (a backup) as strictly as save_cred checks typed input, and never let it
+    loosen what is already set on this Mac: a revoked or human-only entry stays that way. Returns (clean, loosened) where
+    `loosened` lists the ways the backup differs from the local entry in a direction that grants more access."""
+    if not isinstance(m, dict):
+        raise ValueError("a credential in the backup is damaged")
+    local = local or {}
+    ev = str(m.get("env_var") or "")
+    if not ENV_RE.match(ev):
+        raise ValueError("a credential in the backup has an invalid environment variable name")
+    if m.get("mode") not in ("ask", "auto"):
+        raise ValueError("a credential in the backup has an invalid mode")
+    cmds = []
+    for e in (m.get("allowed_commands") or []):
+        if not isinstance(e, dict) or not isinstance(e.get("cmd"), str):
+            raise ValueError("a credential in the backup has a damaged command list")
+        cmd_tokens(e["cmd"], validate=True, check_files=False)       # refuses sudo/bash -c style entries
+        pins = e.get("pins") if isinstance(e.get("pins"), dict) else {}
+        cmds.append({"cmd": e["cmd"], "pins": {str(k): str(v) for k, v in pins.items()}})
+    clean = dict(m)
+    clean.update(env_var=ev, allowed_commands=cmds, window_minutes=max(0, int(m.get("window_minutes") or 0)),
+                 agents=[a for a in (m.get("agents") or []) if isinstance(a, str) and a in AGENTS],
+                 revoked=bool(m.get("revoked")), human_only=bool(m.get("human_only")), acks=[k for k in (m.get("acks") or []) if k in ACK_KEYS])
+    clean["expires"] = norm_expires(m.get("expires")) if m.get("expires") else None
+    loosened = []
+    if local:
+        if local.get("revoked") and not clean["revoked"]:
+            clean["revoked"] = True; loosened.append("stays revoked")
+        if local.get("human_only") and not clean["human_only"]:
+            clean["human_only"] = True; loosened.append("stays human-only")
+        if set(clean["agents"]) - set(local.get("agents", [])) and not clean["human_only"]:
+            loosened.append("adds agents: " + ", ".join(sorted(set(clean["agents"]) - set(local.get("agents", [])))))
+        if local.get("allowed_commands") and not cmds:
+            loosened.append("removes the command allowlist")
+        if local.get("mode") == "ask" and clean["mode"] == "auto":
+            loosened.append("turns off Touch ID approval")
+    if clean["human_only"]:
+        clean["agents"] = []
+    return clean, loosened
+
 ACK_KEYS = ("any_command", "auto")
 
 def set_ack(name, key, on):
@@ -649,10 +798,10 @@ def set_revoked(name, revoked: bool):
 
 def delete_cred(name):
     _confirm(f"delete credential '{name}' permanently")
+    kc_delete(name)            # first: if the Keychain refuses, the credential stays listed instead of becoming an orphan secret
     with _Lock():
         db = list_creds(); db.pop(name, None); _write(META, db)
         g = _read(GRANTS, {}); g.pop(name, None); _write(GRANTS, g)
-    kc_delete(name)
     audit("deleted", name)
 
 # ---------- grants (time-window approvals) ----------

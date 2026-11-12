@@ -376,6 +376,8 @@ def cmd_list(a):
         print(f"{n:24} {state:8} {m['mode']:4} win={m['window_minutes']}m agents={','.join(m['agents']) or '-'} {cmds} folder={m.get('folder') or '-'} scope={m.get('scope') or '-'} addr={m.get('address') or '-'}{' (' + {'lan':'local network','remote':'remote','vpn':'vpn'}.get(m.get('network'), '') + ')' if m.get('network') else ''} "
               f"env={m['env_var']} last_used={m['last_used'] or 'never'} grants={list(g.get(n, {}))}")
 
+from .mask import Masker
+
 def cmd_run(a):
     agent = c.detect_agent()
     cmd = a.command
@@ -386,7 +388,9 @@ def cmd_run(a):
         one_s3 = sum(1 for n in a.names if c.get_meta(n).get("kind") == "s3") == 1   # AWS_* names only when unambiguous
         for n in a.names:
             v = c.authorize(n, agent, cmd, reason=a.reason, run_id=run_id); secrets.append(v); env.update(c.env_for(n, v, std=one_s3))
-            if c.get_meta(n).get("access_key_id"): secrets.append(c.get_meta(n)["access_key_id"])
+            m = c.get_meta(n)
+            if m.get("access_key_id"): secrets.append(m["access_key_id"])
+            if m.get("kind") == "login" and m.get("username"): secrets.append(f"{m['username']}:{v}")      # what a Basic-auth header encodes
     except c.Denied as e:
         die(str(e), 3)
     env.pop("SECREDS_AGENT", None)
@@ -397,11 +401,22 @@ def cmd_run(a):
     except OSError as e:
         c.audit("finished", ",".join(a.names), agent, f"could not start: {e.strerror or type(e).__name__}", run=run_id, rc=127)
         die(f"could not start {cmd[0]}: {e.strerror or type(e).__name__}", 127)
-    secrets = sorted(set(s for s in secrets if s), key=len, reverse=True)
-    for raw in iter(lambda: p.stdout.readline(), b""):
-        line = raw.decode(errors="replace")
-        for s in secrets: line = line.replace(s, "***")
-        sys.stdout.write(line); sys.stdout.flush()
+    mk = Masker(secrets)
+    raw_out = getattr(sys.stdout, "buffer", None)
+    dec = __import__("codecs").getincrementaldecoder("utf-8")("replace")
+    def emit(data):
+        if not data:
+            return
+        if raw_out is not None:
+            raw_out.write(data); raw_out.flush()
+        else:                                   # a redirected text stream (tests)
+            sys.stdout.write(dec.decode(data)); sys.stdout.flush()
+    while True:
+        chunk = os.read(p.stdout.fileno(), 65536)
+        if not chunk:
+            break
+        emit(mk.feed(chunk))
+    emit(mk.flush())
     rc = p.wait(); secs = round(time.time() - t0, 1)
     c.audit("finished", ",".join(a.names), agent, f"exit {rc} after {secs}s", run=run_id, rc=rc, secs=secs)
     sys.exit(rc)

@@ -28,8 +28,9 @@ These are documented design limits. See "Security model" in the README.
 - Code running as the same user, while logged in, can read the Keychain without going through seCreds.
 - The agent name is declared by the caller, not authenticated.
 - A command that has been given a secret can misuse it; masking covers only the exact value.
+- Backups are encrypted to your backup key, but they are not signed. seCreds therefore never takes the update source or feedback link from a backup, keeps a revoked or human-only credential restricted when restoring, and validates every restored entry; still, only restore files you made.
 - It is not a sandbox and has not been independently audited.
 
 ---
 
-<sub>**seCreds** v0.6.3 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.4 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

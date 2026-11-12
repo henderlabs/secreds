@@ -401,6 +401,8 @@ def restore_backup(path, passphrase, mode="merge", dry_run=False, agent="cli", k
     _save_state(last_restore_check=c.iso(c.now()))              # it opened: the password and recovery file work
     meta = json.loads(b["files"]["meta.json"]); secrets = b["secrets"]
     local = c.list_creds()
+    if not isinstance(meta, dict) or not all(isinstance(n, str) and c.NAME_RE.match(n) and isinstance(v, dict) for n, v in meta.items()):
+        raise ValueError("This backup has credential names this version cannot read; refusing to restore it")
     create = [n for n in meta if n not in local]
     clash = [n for n in meta if n in local]
     also = [n for n in (also or []) if n in clash]               # merge, but take the backup's version of these names
@@ -416,19 +418,35 @@ def restore_backup(path, passphrase, mode="merge", dry_run=False, agent="cli", k
         except KeyError:
             different.append(n)
     no_secret = [n for n in create + overwrite if n not in secrets and not meta[n].get("reference")]
-    plan = {"create": sorted(create), "overwrite": sorted(overwrite), "skip_existing": sorted(skip), "no_secret_in_backup": sorted(no_secret), "different": sorted(different)}
+    clean, policy = {}, {}
+    for n in create + overwrite:                      # checked before anything is written; a damaged entry stops the whole restore
+        clean[n], loosened = c.sanitize_meta(meta[n], local.get(n))
+        if loosened:
+            policy[n] = loosened
+    files = b["files"]
+    extras = []
+    if "config.json" in files and not c.CONFIG_FILE.exists():
+        extras.append("settings (agent names; the update source and feedback link are never taken from a backup)")
+    if "notice.txt" in files and (mode == "overwrite" or not c.NOTICE_FILE.exists()):
+        extras.append("the agent notice")
+    plan = {"create": sorted(create), "overwrite": sorted(overwrite), "skip_existing": sorted(skip), "no_secret_in_backup": sorted(no_secret), "different": sorted(different),
+            "policy_notes": policy, "also_restores": extras}
     if dry_run:
         return plan
-    c._confirm(f"restore {len(create) + len(overwrite)} credentials from a backup")
+    what = f"restore {len(create) + len(overwrite)} credentials from a backup"
+    if extras:
+        what += " (and " + ", ".join(extras[:2]) + ")"
+    if policy:
+        what += "; policy kept stricter for " + ", ".join(sorted(policy)[:3])
+    c._confirm(what)
     for n in create + overwrite:                      # secrets first: if the Keychain refuses, no settings are written
         if n in secrets:
             c.kc_set(n, secrets[n])
     with c._Lock():
         db = c.list_creds()
         for n in create + overwrite:
-            db[n] = meta[n]
+            db[n] = clean[n]
         c._write(c.META, db)
-    files = b["files"]
     if "folders.json" in files:
         c._write(c.FOLDERS, sorted(set(json.loads(files["folders.json"])) | set(c._read(c.FOLDERS, []))))
     if "requests.json" in files:
@@ -437,9 +455,17 @@ def restore_backup(path, passphrase, mode="merge", dry_run=False, agent="cli", k
             if k not in mine and k not in db:
                 mine[k] = v
         c._write(c.REQUESTS, mine)
-    for f, target in (("config.json", c.CONFIG_FILE), ("notice.txt", c.NOTICE_FILE)):
-        if f in files and (mode == "overwrite" or not target.exists()):
-            target.write_text(files[f]); os.chmod(target, 0o600)
+    if "config.json" in files and not c.CONFIG_FILE.exists():          # fresh Mac only; never replaces your settings
+        try:
+            cfg = json.loads(files["config.json"])
+        except ValueError:
+            cfg = {}
+        if isinstance(cfg, dict):                                       # where updates come from must never travel inside a backup
+            for k in ("update_repo", "feedback_url"):
+                cfg.pop(k, None)
+            c._write(c.CONFIG_FILE, cfg); os.chmod(c.CONFIG_FILE, 0o600)
+    if "notice.txt" in files and (mode == "overwrite" or not c.NOTICE_FILE.exists()):
+        c.NOTICE_FILE.write_text(files["notice.txt"]); os.chmod(c.NOTICE_FILE, 0o600)
     if "backup-key.json" in files and (mode == "overwrite" or not _keyfile().exists()):
         k = json.loads(files["backup-key.json"])               # the PUBLIC half only: lets this Mac back up with the same key
         c._write(_keyfile(), k); os.chmod(_keyfile(), 0o600)
@@ -458,8 +484,8 @@ def restore_backup(path, passphrase, mode="merge", dry_run=False, agent="cli", k
     if "audit.log" in files and not c.AUDIT.exists():
         c.AUDIT.write_text(files["audit.log"]); os.chmod(c.AUDIT, 0o600)
     for n in create + overwrite:
-        if meta[n].get("folder"):
-            c.ensure_folders(meta[n]["folder"])
+        if clean[n].get("folder"):
+            c.ensure_folders(clean[n]["folder"])
     c.use_home(c.DATA)                                # pick up a restored config.json
     c.audit("backup-restored", "", agent, f"{len(create)} created, {len(overwrite)} overwritten, {len(skip)} kept as they were")
     return dict(plan, restored=len(create) + len(overwrite))

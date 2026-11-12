@@ -45,6 +45,8 @@ def save(owner=None, agents=None, families=None, feedback_url=None, update_repo=
     if update_repo is not None:
         r = update_repo.strip()
         if r and not REPO_RE.match(r): raise ValueError("Update repository looks like owner/name")
+        if r != str(cfg.get("update_repo", "")).strip():
+            c._confirm("change where seCreds updates come from")    # updates install code, so the source needs the owner's approval
         cfg["update_repo"] = r
         if not r: cfg.pop("update_repo")
     if keep_scripts is not None:

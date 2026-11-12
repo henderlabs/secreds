@@ -1,11 +1,15 @@
 // seCreds Keychain helper. Signed with a stable identity so Keychain grants belong to seCreds, not to Python.
 // It never prints a secret except `get`, which writes the value to stdout for the calling seCreds process.
-// It makes no policy decisions: seCreds (Python) still checks agents, allowlists, windows and revocation first.
+// It makes no policy decisions itself: seCreds (Python) checks agents, allowlists, windows and revocation first, and
+// then hands `get` a single-use ticket (a 0600 file in the data folder, valid for 30 seconds). Running `get` directly
+// without a ticket is refused, so the helper is not an open door to every stored secret. This raises the bar; it is
+// not a sandbox against code running as the same user that can also write into the data folder.
 import Foundation
 import Security
 import LocalAuthentication
 
-let service = ProcessInfo.processInfo.environment["SECREDS_SERVICE"] ?? "secreds"
+let service = "secreds"
+let dataHome = ProcessInfo.processInfo.environment["SECREDS_HOME"] ?? (NSHomeDirectory() + "/.secreds")
 func fail(_ msg: String, _ code: Int32) -> Never { FileHandle.standardError.write(Data((msg + "\n").utf8)); exit(code) }
 func q(_ name: String) -> [String: Any] {
     [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: name]
@@ -20,6 +24,19 @@ func code(_ st: OSStatus) -> Int32 {
     }
 }
 func die(_ what: String, _ st: OSStatus) -> Never { fail("\(what) (OSStatus \(st))", code(st)) }
+
+// Consume a ticket: it must exist, be a regular file owned by this user and private, name this credential, and be unexpired.
+func consumeTicket(_ id: String, for name: String) -> Bool {
+    guard id.count == 64, id.allSatisfy({ $0.isHexDigit }) else { return false }
+    let path = dataHome + "/tickets/" + id
+    var st = stat()
+    guard lstat(path, &st) == 0, (st.st_mode & S_IFMT) == S_IFREG, st.st_uid == getuid(), (st.st_mode & 0o077) == 0 else { return false }
+    guard let data = FileManager.default.contents(atPath: path) else { return false }
+    unlink(path)                                   // single use, whatever the outcome
+    guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let n = obj["name"] as? String, let exp = obj["exp"] as? Double else { return false }
+    return n == name && exp > Date().timeIntervalSince1970
+}
 
 let args = CommandLine.arguments
 guard args.count >= 2 else { fail("usage: seCreds-kc get|set|has|delete|touchid|trust|ident NAME", 2) }
@@ -36,6 +53,7 @@ case "ident":   // which signing identity this binary runs as (no secrets)
 case "has":
     exit(code(SecItemCopyMatching(q(name) as CFDictionary, nil)))
 case "get":
+    guard args.count > 3, consumeTicket(args[3], for: name) else { fail("get needs a valid ticket from seCreds (OSStatus -128)", 45) }
     var out: AnyObject?
     var d = q(name); d[kSecReturnData as String] = true
     let st = SecItemCopyMatching(d as CFDictionary, &out)

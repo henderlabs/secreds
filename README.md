@@ -56,7 +56,7 @@ Connecting an agent to a shared or team password manager is the easy route, and 
 ## Features
 
 - **Per-credential policy:** allowed agents, Touch ID or auto approval, an approval window (15 minutes to 24 hours; new credentials default to 30 minutes), expiry, revoke and restore.
-- **Allowed-commands list with script pinning:** "this key may only be used with `python3 ~/scripts/audit.py`", and if that script changes it stops working until you re-pin it. Overly broad entries such as `bash -c` or `sudo` are rejected.
+- **Allowed-commands list with script pinning:** "this key may only be used with `python3 ~/scripts/audit.py`", and if that script changes it stops working until you re-pin it. Overly broad entries such as `bash -c` or `sudo` are rejected, and a script must be given by full path and exist when you allow it, so it can always be pinned.
 - **Human-only credentials** that no agent can ever use (root passwords, admin logins). You can still reveal or copy them.
 - **Reference entries:** a record with no secret, for access that needs none, such as keyless SSH from your Mac. It holds notes, an address and a folder. Agents read it with `secreds info NAME`. `secreds run` refuses it, and Reveal and Copy have nothing to show. It still appears in the inventory and in backups.
 - **Credential types:** API key, login (username and password), S3 bucket (access key ID, secret key, bucket, endpoint, region), SSH key or passphrase, other. Logins and S3 credentials inject the right set of variables (`NAME_USERNAME`, `NAME_PASSWORD`, `AWS_*`, and so on), and an address or several hosts can be stored with each credential.
@@ -92,7 +92,7 @@ secreds install-app                                       # builds ~/Application
 ## Quick start
 
 ```bash
-secreds --version                # seCreds 0.6.3 by henderlabs; `secreds about` also shows where to send feedback
+secreds --version                # seCreds 0.6.4 by henderlabs; `secreds about` also shows where to send feedback
 secreds gui                      # add a credential (Touch ID to open)
 secreds list                     # names, settings and addresses: never secrets
 SECREDS_AGENT=claude secreds run my-nas --reason "check free space on the NAS" -- python3 check_nas.py
@@ -128,7 +128,7 @@ tools/keychain-helper/build.sh                          # compile and sign (need
 ~/.secreds/seCreds-kc.app/Contents/MacOS/seCreds-kc trust NAME   # per existing credential: add the helper to its access list
 ```
 
-`trust` only edits the item's access list; it never reads the secret. macOS may ask for your login password once per item. Personal Team certificates expire after about a year, so rebuild and re-sign then. The helper adds no new barrier: anything that can run it can read the credentials it is trusted for, as with the shared Python before.
+`trust` only edits the item's access list; it never reads the secret. macOS may ask for your login password once per item. Personal Team certificates expire after about a year, so rebuild and re-sign then. The helper's `get` command refuses to run without a single-use, 30-second ticket that seCreds writes into its private data folder after the policy checks pass, so running the helper directly no longer hands out secrets. This raises the bar but is not a sandbox: code running as you that can also write into `~/.secreds` could forge a ticket, as before it could read the Keychain through the shared Python.
 
 ## Backup and restore
 
@@ -220,4 +220,4 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
-<sub>**seCreds** v0.6.3 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.4 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

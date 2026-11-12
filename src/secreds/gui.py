@@ -1,4 +1,4 @@
-"""Local GUI: loopback-only web server, random per-launch token, secret values never sent to the browser."""
+"""Local GUI: loopback-only web server, random per-launch token. Secret values reach the browser only through Reveal (Touch ID); the dashboard shows a mask plus the last few characters."""
 import json, secrets, threading, webbrowser
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

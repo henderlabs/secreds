@@ -111,6 +111,32 @@ class BackupTests(CoreCase):
         self.assertEqual(r["overwrite"], ["alpha", "beta"]); self.assertEqual(self.store["alpha"], "alpha-secret-AAAA-1111")
         self.assertEqual(c.get_meta("alpha")["notes"], "")
 
+    def test_restore_never_takes_the_update_source_and_keeps_revocation(self):
+        self.write_config(owner="Pat", update_repo="evil/repo", feedback_url="https://evil.example/x")
+        path = self.make()["path"]
+        c.set_revoked("alpha", True)
+        r = backup.restore_backup(path, PASS, mode="overwrite", dry_run=True)
+        self.assertIn("alpha", r["policy_notes"]); self.assertIn("stays revoked", r["policy_notes"]["alpha"])
+        backup.restore_backup(path, PASS, mode="overwrite")
+        self.assertTrue(c.get_meta("alpha")["revoked"])                      # an old backup cannot un-revoke it
+        new_home = pathlib.Path(tempfile.mkdtemp()); self.store.clear(); c.use_home(new_home)        # fresh Mac
+        backup.restore_backup(path, PASS)
+        cfg = json.loads((new_home / "config.json").read_text())
+        self.assertEqual(cfg.get("owner"), "Pat"); self.assertNotIn("update_repo", cfg); self.assertNotIn("feedback_url", cfg)
+
+    def test_restore_refuses_a_damaged_credential_before_writing_anything(self):
+        path = self.make()["path"]
+        orig = backup._open
+        def damaged(*a, **k):
+            b = orig(*a, **k); m = json.loads(b["files"]["meta.json"]); m["alpha"]["env_var"] = "bad name"
+            b["files"]["meta.json"] = json.dumps(m); return b
+        c.delete_cred("alpha"); c.delete_cred("beta"); backup._open = damaged
+        try:
+            with self.assertRaises(ValueError): backup.restore_backup(path, PASS)
+        finally:
+            backup._open = orig
+        self.assertEqual(c.list_creds(), {}); self.assertEqual(self.store, {})
+
     def test_dry_run_changes_nothing_and_needs_no_touch_id(self):
         path = self.make()["path"]
         c.delete_cred("beta"); before = (self.home / "meta.json").read_text(); self.prompts.clear()
