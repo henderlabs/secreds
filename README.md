@@ -24,6 +24,14 @@ seCreds is a small local credential broker for AI coding agents such as Claude C
 
 ![Activity page with two runs expanded, one of them a failed run](docs/screenshots/activity.png)
 
+**Agents:** tick the AI tools you use (or add your own), group profiles that count as one agent, and see the exact notice every agent receives, plus a ready-to-paste instructions file for each tool.
+
+![Agents page: agent list, profile groups, the notice agents see](docs/screenshots/agents.png)
+
+**Backup:** set one backup password once, keep recovery files in two places, and run a scheduled plan to iCloud, a cloud drive, a folder or an S3 bucket. Restore and sync from the same page.
+
+![Backup page: backup key status, backup plan, one-off backup, sync and restore](docs/screenshots/backup.png)
+
 ## Why
 
 Agents need real credentials to do real work: a NAS API, an S3 bucket, a hypervisor. The usual options are bad: pasting secrets into chat (they end up in transcripts), keeping them in plain `.env` files (any process can read them), or giving the agent your whole password manager session. seCreds sits in the middle:
