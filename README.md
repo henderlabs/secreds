@@ -132,29 +132,34 @@ tools/keychain-helper/build.sh                          # compile and sign (need
 
 ## Backup and restore
 
-One encrypted file holds every secret and every setting (credential settings, folders, pending requests, the agent notice, `config.json`, and optionally the activity log). It is encrypted with a passphrase you choose (scrypt and AES-256-GCM) before it leaves your Mac, so a cloud folder only ever holds ciphertext. Approval windows are not backed up: everything starts locked after a restore.
+One encrypted file holds every secret and every setting (credential settings, folders, pending requests, the agent notice, `config.json`, the backup plan, and optionally the activity log). Backups are encrypted on your Mac before they leave it, so a cloud folder only ever holds ciphertext. Approval windows are not backed up: everything starts locked after a restore.
+
+**The backup key (recommended).** You set **one backup password, once**. seCreds then keeps only a *public* key on the Mac, so it can make backups, including scheduled unattended ones, without ever knowing the password. A small **recovery file**, locked by your password, is what opens them (X25519 key agreement with AES-256-GCM; the recovery file uses scrypt). You need the password and the recovery file only on the day you restore. Keep the password in your password manager plus one offline copy, and keep the recovery file in two places.
 
 ```bash
+secreds backup-key setup --icloud --to /Volumes/NAS/recovery   # once: choose a 16+ character password; saves the recovery file in each place
+secreds backup-key status
 secreds backup --icloud            # into iCloud Drive (a "seCreds Backups" folder), or:
 secreds backup --to /Volumes/NAS/backups
+secreds backup --plan              # run your saved plan: every destination, then prune old copies
 secreds backups --icloud           # list the backups there
 secreds backup-info FILE           # see what is inside (names only)
 secreds restore-backup --icloud    # newest backup in iCloud Drive; add --dry-run to preview
-secreds restore-backup FILE --mode overwrite
+secreds restore-backup FILE --mode overwrite --key /path/to/secreds-recovery-key-XXXX.json
 ```
 
-The **Backup** page in the GUI does the same with a folder chooser. Each backup is read back and verified before it is trusted, and creating or restoring one needs Touch ID.
+The **Backup** page in the GUI does the same, with a folder chooser, a **backup plan** (main and second destination, optionally an S3 bucket, how many to keep, daily or weekly) and a restore test. Each backup is read back and verified, and creating or restoring one needs Touch ID (scheduled runs need none, since they only use the public key). Without a backup key, `secreds backup --passphrase` makes a one-off backup protected by a passphrase instead.
 
-- **Passphrase:** at least 12 characters, and **16 or more for a cloud folder**, because a file in the cloud could be attacked offline if the account were ever compromised. Four or five random words works well. Without the passphrase a backup cannot be opened, and nobody can recover it.
-- **Restore modes:** `merge` (default) never overwrites a credential that already exists on this Mac; `overwrite` lets the backup win.
-- **A second Mac:** iCloud Keychain does not sync these items (see "Why not iCloud Keychain sync?"). Install seCreds on the new Mac, then `secreds restore-backup --icloud`. Backups also carry the public backup key and your backup plan. To catch a Mac up later, use **Backup → Sync from backup** or `secreds sync`: it compares by name, adds what is new, and only overwrites a credential that exists on both Macs if you tick it.
+- **Password rules:** at least 16 characters for the backup key (four or five random words works well). Without the password and a recovery file a backup cannot be opened, and nobody can recover it.
+- **Restore modes:** `merge` (default) never overwrites a credential that already exists on this Mac; `overwrite` lets the backup win, but a credential you revoked or made human-only stays restricted. Restoring never takes the update source or feedback link from a backup, and it validates each entry. Backups are encrypted but not signed, so only restore files you made.
+- **A second Mac:** iCloud Keychain does not sync these items (see "Why not iCloud Keychain sync?"). Install seCreds on the new Mac, then `secreds restore-backup --icloud` with the recovery file. To catch a Mac up later, use **Backup → Sync from backup** or `secreds sync`: it compares by name, adds what is new, and only overwrites a credential that exists on both Macs if you tick it.
 
 ## Updates
 
 ```bash
 secreds update                     # check (at most once a day) and report
 secreds update --apply             # show the release notes, then install after Touch ID
-secreds update --apply --tag v0.1.0   # install a specific version (also how you roll back)
+secreds update --apply --tag vX.Y.Z   # install a specific version (also how you roll back)
 secreds update --enable-daily      # a macOS LaunchAgent that checks once a day and notifies you
 ```
 
@@ -184,7 +189,7 @@ Everything here can also be changed on the Settings and Agents pages. `families`
 - Secrets at rest: stored in the Keychain, encrypted by macOS (turn on FileVault).
 - An agent that is not on a credential's list, a revoked or expired credential, a command that is not on the allowed list, or a pinned script that was edited.
 - Secrets leaking into transcripts, logs and files: values are masked in command output and never written to the audit log or settings files.
-- Other websites or local pages talking to the GUI: loopback only, per-launch token, Host-header check, no secret values ever sent to the browser.
+- Other websites or local pages talking to the GUI: loopback only, per-launch token, Host-header check, secret values reach the browser only through Reveal, which needs Touch ID (the dashboard shows a mask and the last few characters).
 - Quiet loosening of policy: edits, restores, deletes, reveal, copy, export and re-pinning need Touch ID.
 
 **What it does not protect against. Read this.**
@@ -202,7 +207,7 @@ The mitigations are the usual ones: FileVault, a strong login password, narrow s
 
 - A properly distributed, notarized app (Developer ID), which would allow hardware-enforced Touch ID (a Keychain access control) and iCloud sync without building the helper yourself.
 - A "server edition" for Linux hosts (an encrypted store with a master passphrase, and passkey approval in the browser), so agents on other machines can share one broker. This needs a different design and is not built.
-- Scheduled, automatic backups (today a backup is made when you ask for one).
+- A signed backup format, so a backup can be checked as coming from your Mac before it is restored.
 
 ## Development
 
