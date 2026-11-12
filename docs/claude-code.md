@@ -90,4 +90,4 @@ would not want your employer to see away from work sessions, or label them Perso
 
 ---
 
-<sub>**seCreds** v0.6.4 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.5 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

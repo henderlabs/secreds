@@ -100,7 +100,7 @@ secreds install-app                                       # builds ~/Application
 ## Quick start
 
 ```bash
-secreds --version                # seCreds 0.6.4 by henderlabs; `secreds about` also shows where to send feedback
+secreds --version                # seCreds 0.6.5 by henderlabs; `secreds about` also shows where to send feedback
 secreds gui                      # add a credential (Touch ID to open)
 secreds list                     # names, settings and addresses: never secrets
 SECREDS_AGENT=claude secreds run my-nas --reason "check free space on the NAS" -- python3 check_nas.py
@@ -233,4 +233,4 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
-<sub>**seCreds** v0.6.4 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>
+<sub>**seCreds** v0.6.5 · by [henderlabs](https://github.com/henderlabs) · [Send feedback](https://github.com/henderlabs/secreds/issues/new/choose)</sub>

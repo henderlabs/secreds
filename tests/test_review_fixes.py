@@ -1,4 +1,4 @@
-"""Regression tests for the 0.6.4 code-review fixes."""
+"""Regression tests for the 0.6.5 code-review fixes."""
 import base64, json, os, stat, sys, tempfile, threading, unittest, pathlib
 from helpers import CoreCase, SECRET
 from secreds import core as c
